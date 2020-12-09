@@ -24,14 +24,16 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
+mongoose.connect("mongodb+srv://TheDumebi:" + process.env.PASSWORD +"@cluster0.zrvvc.mongodb.net/userDB", {useNewUrlParser: true, useUnifiedTopology: true})
+// mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true, useUnifiedTopology: true});
 mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
   googleId: String,
-  facebookId: String
+  facebookId: String,
+  secret: Array
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -107,11 +109,16 @@ app.get("/auth/facebook/secrets",
 );
 
 app.get("/secrets", function(req, res) {
-  if (req.isAuthenticated()) {
-    res.render("secrets");
-  } else {
-    res.redirect("/login");
-  }
+  // find all users that the secret field is not equal to ($ne) null
+  User.find({"secret": {$elemMatch: {$exists: true}}}, function(err, foundUsers) {
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUsers) {
+        res.render("secrets", {usersWithSecrets: foundUsers});
+      }
+    }
+  });
 });
 
 app.route("/register")
@@ -156,6 +163,35 @@ app.get("/logout", function(req, res) {
   res.redirect("/");
 });
 
-app.listen(3000, function(req, res) {
-  console.log("Server started succesfully on port 3000");
+app.get("/submit", function(req, res) {
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+app.post("/submit", function(req, res) {
+  const submittedSecret = req.body.secret;
+  User.findById(req.user.id, function(err, foundUser) {
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUser) {
+        foundUser.secret.push(submittedSecret);
+        foundUser.save(function() {
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
+});
+
+let port = process.env.PORT;
+if (port == null || port == "") {
+  port = 3000;
+}
+
+app.listen(port, function() {
+  console.log("Server has started successfully");
 });
